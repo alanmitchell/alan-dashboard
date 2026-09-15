@@ -33,6 +33,19 @@
     </div>
   </header>
 
+{% if config.warnings %}
+  {#- A typo in the config file is silently ignored otherwise; say so where it
+      will actually be seen. -#}
+  <div class="config-warning" role="status">
+    <strong>Check your configuration file.</strong>
+    <ul>
+      {% for warning in config.warnings %}
+      <li>{{ warning }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
   <main class="panels">
     {% for panel in panels %}
     <section class="panel" id="panel-{{ panel.key }}">

@@ -62,6 +62,21 @@ body {
 .masthead p { margin: 2px 0 0; color: var(--ink-secondary); font-size: 14px; }
 .stamp { color: var(--ink-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 
+/* ---- config warnings -------------------------------------------------- */
+
+.config-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.config-warning strong { color: var(--ink); }
+.config-warning ul { margin: 6px 0 0; padding-left: 18px; }
+.config-warning li { margin: 2px 0; }
+
 /* ---- cards ----------------------------------------------------------- */
 
 .panels {

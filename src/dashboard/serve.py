@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .config import Config
+from .config import Config, apply_process_timezone
 
 log = logging.getLogger("dashboard.serve")
 
@@ -105,6 +105,7 @@ def main() -> int:
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
     config = Config.from_env()
+    apply_process_timezone(config)
     Handler.config = config
 
     server = ThreadingHTTPServer((config.host, config.port), Handler)

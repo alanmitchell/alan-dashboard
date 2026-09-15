@@ -23,7 +23,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
-from .config import Config
+from .config import Config, apply_process_timezone
 from .sources import Panel, all_sources
 
 log = logging.getLogger("dashboard.generate")
@@ -107,6 +107,7 @@ def main() -> int:
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
     config = Config.from_env()
+    apply_process_timezone(config)
     generated_at = datetime.now(config.timezone)
 
     panels = collect_panels(config)

@@ -37,6 +37,7 @@ rather than serving a page that quietly stopped updating.
 
 ```
 cloudinabottle.toml      App manifest (resources, routing, storage tiers)
+config.example.toml      Template for $BOTTLE_APP_DATA_DIR/config.toml
 Dockerfile               Image: python:3.12-slim + cron
 bin/entrypoint.sh        PID 1: snapshots env, starts cron + server
 bin/generate.sh          What cron actually invokes
@@ -80,7 +81,9 @@ PYTHONPATH=src python -m dashboard.generate                    # generate once
 3. Approve the `secrets` grant the manifest requests.
 4. Store your calendar URL in the **Secrets** app under `CALENDAR_ICS_URLS`
    (see [Secrets](#secrets)).
-5. It appears at `https://alan-dashboard.<your-zone-domain>/`.
+5. Copy `config.example.toml` to `$BOTTLE_APP_DATA_DIR/config.toml` and set at
+   least `timezone` (see [The config file](#the-config-file)).
+6. It appears at `https://alan-dashboard.<your-zone-domain>/`.
 
 The manifest leaves `public_paths` empty, so the router requires your login on
 every path — appropriate for a page showing your home's sensors and your
@@ -90,28 +93,65 @@ constant `ok` and exposes no data.
 
 ## Configuration
 
-Non-secret settings are read from the environment. Secrets come from the
-Bottle's secrets service; see [Secrets](#secrets) below. Nothing needs a config
-file in the repository.
+Settings resolve in a fixed order: **environment variable → config file →
+built-in default**. Credentials are separate and come from the secrets service;
+see [Secrets](#secrets).
+
+### The config file
+
+Cloud in a Bottle cannot set environment variables on an installed app, so
+anything you want to change after deployment lives in a TOML file in the
+persistent data tier:
+
+```
+$BOTTLE_APP_DATA_DIR/config.toml
+```
+
+[`config.example.toml`](config.example.toml) in this repo is a commented
+template — copy it onto your instance with `bottle app ssh`. It is *not* read
+from the repository, so the file on your instance is the only one that counts.
+
+It is re-read on every generate run, so an edit takes effect on **the next cron
+tick — no restart and no rebuild**.
+
+| File key | Env override | Default | Meaning |
+|---|---|---|---|
+| `title` | `DASHBOARD_TITLE` | `Home Dashboard` | Page heading and `<title>`. |
+| `subtitle` | `DASHBOARD_SUBTITLE` | — | Optional line under the heading. |
+| `timezone` | `TZ` | `UTC` | IANA name, e.g. `America/Anchorage`. |
+| `refresh_seconds` | `DASHBOARD_REFRESH_SECONDS` | `1860` | How often the page reloads itself. Keep it slightly longer than the cron interval. |
+| `calendar_lookahead_days` | `CALENDAR_LOOKAHEAD_DAYS` | `7` | How far ahead the calendar panel looks. |
+| `http_timeout` | `DASHBOARD_HTTP_TIMEOUT` | `15` | Timeout for outbound requests, in seconds. |
+
+A broken file never stops the page regenerating. A parse error, an unknown key
+or a wrong type is reported **as a banner on the dashboard itself** and the
+default is used — a typo like `timezoen` is otherwise invisible, because it
+looks like it worked. An unknown timezone warns the same way and falls back to
+UTC.
+
+Setting `timezone` also aligns the process clock, so `bottle logs` timestamps
+match the times on the page.
+
+### Environment only
+
+These are infrastructure rather than preferences: they are fixed when the
+container starts, so putting them in a file that is re-read every half hour
+would be misleading.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TZ` | `UTC` | Display timezone, e.g. `America/Anchorage`. An unknown zone falls back to UTC rather than failing. |
-| `DASHBOARD_TITLE` | `Home Dashboard` | Page heading and `<title>`. |
-| `DASHBOARD_SUBTITLE` | — | Optional line under the heading. |
 | `CALENDAR_ICS_URLS` | — | Comma-separated iCalendar feeds. Overrides the stored secret; see [Secrets](#secrets). |
-| `CALENDAR_LOOKAHEAD_DAYS` | `7` | How far ahead the calendar panel looks. |
-| `DASHBOARD_REFRESH_SECONDS` | `1860` | How often the page reloads itself. Keep it slightly longer than the cron interval. |
-| `DASHBOARD_HTTP_TIMEOUT` | `15` | Timeout for outbound requests, in seconds. |
+| `DASHBOARD_CONFIG_FILE` | *(data tier)* | Full path to the config file, if not the default location. |
 | `DASHBOARD_LOG_LEVEL` | `INFO` | Python log level. |
 | `DASHBOARD_OUTPUT_DIR` | *(see below)* | Overrides where the site is written. |
+| `DASHBOARD_HOST` | `0.0.0.0` | Bind address. |
 | `PORT` | `8080` | Must match `[runtime.container].port` in the manifest. |
 
-Cloud in a Bottle injects `BOTTLE_APP_DATA_DIR` and `BOTTLE_APP_TEMP_DIR`
-itself. Output goes to the first of `DASHBOARD_OUTPUT_DIR`,
-`BOTTLE_APP_TEMP_DIR`, `BOTTLE_APP_DATA_DIR`, or `./var` — the *temp* tier by
-preference, because the page is reproducible on the next cron run and does not
-need to occupy backed-up storage.
+Cloud in a Bottle injects `BOTTLE_APP_DATA_DIR`, `BOTTLE_APP_TEMP_DIR`,
+`BOTTLE_ROUTER_URL` and `BOTTLE_APP_TOKEN` itself. Output goes to the first of
+`DASHBOARD_OUTPUT_DIR`, `BOTTLE_APP_TEMP_DIR`, `BOTTLE_APP_DATA_DIR`, or
+`./var` — the *temp* tier by preference, because the page is reproducible on the
+next cron run and does not need to occupy backed-up storage.
 
 ## Secrets
 
@@ -120,7 +160,10 @@ on an installed app**, and a secret must never go in the Dockerfile — `ENV` an
 `ARG` are both baked into image layers and readable with `docker history`, even
 if the value never reached git.
 
-So anything sensitive comes from the pre-installed **Secrets** app. The manifest
+Non-secret settings solve this with a file in the data tier (see
+[The config file](#the-config-file)), but a credential must not go there: that
+tier is backed up, and a secret in a backup is a secret in more places than you
+meant. So anything sensitive comes from the pre-installed **Secrets** app. The manifest
 declares the grant:
 
 ```toml

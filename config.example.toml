@@ -1,0 +1,31 @@
+# Example settings file.
+#
+# Copy this to $BOTTLE_APP_DATA_DIR/config.toml on your instance (it is NOT read
+# from the repository). Every setting is optional; anything absent uses its
+# built-in default, and a matching environment variable overrides the file.
+#
+# Re-read on every generate run, so an edit takes effect on the next cron tick:
+# no restart, no rebuild.
+#
+# Secrets do NOT go here -- this tier is backed up. Calendar URLs belong in the
+# Secrets app under CALENDAR_ICS_URLS. See the README.
+
+# Page heading and browser title.                    env: DASHBOARD_TITLE
+title = "Alan's Home"
+
+# Optional line under the heading.                   env: DASHBOARD_SUBTITLE
+subtitle = "Anchorage"
+
+# IANA name. An unknown value warns on the page      env: TZ
+# and falls back to UTC.
+timezone = "America/Anchorage"
+
+# How often the page reloads itself. Keep it a bit   env: DASHBOARD_REFRESH_SECONDS
+# longer than the cron interval (1800s).
+refresh_seconds = 1860
+
+# How far ahead the calendar panel looks.            env: CALENDAR_LOOKAHEAD_DAYS
+calendar_lookahead_days = 7
+
+# Timeout for outbound requests, in seconds.         env: DASHBOARD_HTTP_TIMEOUT
+http_timeout = 15
