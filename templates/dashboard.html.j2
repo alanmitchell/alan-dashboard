@@ -1,0 +1,120 @@
+{#- The whole dashboard: one self-contained document, rebuilt every 30 minutes.
+    Panels come from dashboard.sources; each one renders whatever subset of
+    metrics / chart / items it filled in. -#}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{#- The page is static, so it refreshes itself shortly after cron rewrites it.
+    Keeps a wall-mounted display current without any client-side code. -#}
+<meta http-equiv="refresh" content="{{ config.refresh_seconds }}">
+<meta name="robots" content="noindex, nofollow">
+<title>{{ config.title }}</title>
+<style>
+{# Our own file, not user input: must bypass escaping or the quoted
+   font names in the stack would be mangled inside <style>. #}
+{{ stylesheet | safe }}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <h1>{{ config.title }}</h1>
+      {% if config.subtitle %}
+      <p>{{ config.subtitle }}</p>
+      {% endif %}
+    </div>
+    <div class="stamp">
+      Updated <time datetime="{{ generated_at.isoformat() }}">{{ generated_label }}</time>
+      &middot; {{ config.tz_name }}
+    </div>
+  </header>
+
+  <main class="panels">
+    {% for panel in panels %}
+    <section class="panel" id="panel-{{ panel.key }}">
+
+      <div class="panel-head">
+        <h2>{{ panel.title }}</h2>
+        {% if panel.stub %}
+        <span class="badge" title="This panel is not wired to a real data source yet.">Sample data</span>
+        {% endif %}
+        {% if panel.subtitle %}
+        <span class="sub">{{ panel.subtitle }}</span>
+        {% endif %}
+      </div>
+
+      {% if panel.error %}
+      <p class="notice"><span class="icon" aria-hidden="true">!</span>
+        <span><strong>Could not refresh.</strong> {{ panel.error }}</span></p>
+      {% endif %}
+
+      {% if panel.metrics %}
+      <ul class="metrics">
+        {% for metric in panel.metrics %}
+        <li>
+          <span class="metric-label">{{ metric.label }}</span>
+          <span class="metric-value">{{ metric.value }}{% if metric.unit %}<span class="metric-unit">{{ metric.unit }}</span>{% endif %}</span>
+          {% if metric.note %}<span class="metric-note">{{ metric.note }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if panel.chart %}
+      {#- Both themes ship in the page; CSS shows the matching one. Marked
+          aria-hidden because the table below is the accessible copy. -#}
+      <figure class="chart" aria-hidden="true">
+        <div class="chart-light">{{ panel.chart.light_svg | safe }}</div>
+        <div class="chart-dark">{{ panel.chart.dark_svg | safe }}</div>
+      </figure>
+      <details>
+        <summary class="table-toggle">{{ panel.title }} data</summary>
+        <div class="data-table-scroll">
+          <table class="data">
+            <caption class="visually-hidden">{{ panel.title }} &mdash; {{ panel.subtitle or 'data' }}</caption>
+            <thead>
+              <tr><th scope="col">{{ panel.chart.columns[0] }}</th><th scope="col">{{ panel.chart.columns[1] }}</th></tr>
+            </thead>
+            <tbody>
+              {% for label, value in panel.chart.rows %}
+              <tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+
+      {% if panel.items %}
+      <ul class="items">
+        {% for item in panel.items %}
+        <li{% if item.highlight %} class="now"{% endif %}>
+          <span class="when">{{ item.secondary }}</span>
+          <span class="what">{{ item.primary }}
+            {% if item.meta %}<span class="where">{{ item.meta }}</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if panel.is_empty %}
+      <p class="empty">{{ panel.empty_message }}</p>
+      {% endif %}
+
+    </section>
+    {% endfor %}
+  </main>
+
+  <footer>
+    <span>Rebuilt every 30 minutes by cron.</span>
+    <span>This page refreshes itself every {{ (config.refresh_seconds // 60) }} minutes.</span>
+  </footer>
+
+</div>
+</body>
+</html>

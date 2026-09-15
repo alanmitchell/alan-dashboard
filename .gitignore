@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- alan-dashboard ---
+# Generated site and local dev output
+var/
+# Environment snapshot written by bin/entrypoint.sh at container start.
+# Can contain the secret calendar URL.
+.cron.env

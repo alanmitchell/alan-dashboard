@@ -1,0 +1,10 @@
+# Runtime dependencies. Pinned loosely (~=) so `pip install -U` picks up patch
+# releases; pin exactly if you want fully reproducible container builds.
+Jinja2~=3.1
+matplotlib~=3.9
+requests~=2.32
+
+# Calendar feeds. `recurring-ical-events` expands RRULEs, so a weekly standup
+# shows up on every occurrence instead of only its first.
+icalendar~=6.0
+recurring-ical-events~=3.0

@@ -1,0 +1,51 @@
+# Cloud in a Bottle app manifest.
+# Spec: https://cloudinabottle.org/docs/creating_an_app/manifest_spec.html
+#
+# Deploy by pointing "Deploy New App" at this repository's git URL. The platform
+# reads this file, builds the Dockerfile with rootless podman, and serves the
+# app at https://alan-dashboard.<your-zone-domain>/
+
+[app]
+name = "alan-dashboard"
+version = "0.1.0"
+description = "Home and activity dashboard, rebuilt every half hour by cron."
+authors = ["Alan Mitchell"]
+
+[runtime.container]
+image = "Dockerfile"
+# The server binds 0.0.0.0:$PORT; $PORT is set to 8080 in the Dockerfile.
+# Change both together.
+port = 8080
+
+[routing]
+# Answered by dashboard.serve without touching the generated page, so a failed
+# rebuild does not read as an unhealthy container.
+health_check = "/healthz"
+
+# Empty on purpose: the router requires your login on every path, which is what
+# you want for a page showing your home's sensors and your calendar.
+# If a deploy reports the health check failing on auth rather than on the app,
+# add "/healthz" here -- it returns a constant "ok" and exposes no data.
+public_paths = []
+
+[[links]]
+name = "Dashboard"
+path = "/"
+
+[resources]
+# The server idles at a few tens of MB, but every half hour cron starts a second
+# process that imports matplotlib and numpy (~200 MB resident) alongside it.
+memory_mb = 512
+# Building matplotlib's wheel chain needs noticeably more than running it.
+build_memory_mb = 2048
+# Generation is a short CPU burst every 30 minutes. At the 0.1 default it would
+# be throttled to roughly ten times the wall-clock time for no benefit.
+cpu_cores = 0.5
+
+[data]
+# Config and any credentials you add later. Backed up.
+app_data = true
+# The rendered site. It is reproducible from the sources on the next cron tick,
+# so it belongs in the scratch tier rather than the backed-up one -- and
+# dashboard.serve returns a self-refreshing placeholder if it is ever empty.
+app_temp_data = true

@@ -1,0 +1,9 @@
+# Installed to /etc/cron.d/dashboard. Fields: m h dom mon dow user command
+#
+# Runs on the hour and the half hour. Output goes to PID 1's stdout -- the
+# container's stdout -- so `bottle logs alan-dashboard` shows each run. Without
+# that redirect cron would try to mail the output and it would be lost.
+#
+# Change the schedule here and rebuild; DASHBOARD_REFRESH_SECONDS should stay a
+# little longer than the interval so the page reloads just after a rebuild.
+*/30 * * * * root /app/bin/generate.sh >> /proc/1/fd/1 2>&1

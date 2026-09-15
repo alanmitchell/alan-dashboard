@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+# The package lives under src/ and is not installed; put it on the path so the
+# tests import the same modules the container runs.
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
