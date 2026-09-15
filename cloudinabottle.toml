@@ -28,6 +28,18 @@ health_check = "/healthz"
 # add "/healthz" here -- it returns a constant "ok" and exposes no data.
 public_paths = []
 
+# The platform has no mechanism for setting arbitrary environment variables on
+# an installed app, so anything that must stay out of this repository comes from
+# the pre-installed Secrets app. Store the calendar's secret iCal address there
+# under this key; the router authenticates the read with BOTTLE_APP_TOKEN.
+# An environment variable of the same name still wins, which keeps local
+# `docker run --env-file` development working. See src/dashboard/secrets.py.
+[[services.v2.consumes]]
+service = "github.com/imbue-openhost/openhost/services/secrets"
+shortname = "secrets"
+version = ">=0.1.0"
+grants = [{ key = "CALENDAR_ICS_URLS" }]
+
 [[links]]
 name = "Dashboard"
 path = "/"

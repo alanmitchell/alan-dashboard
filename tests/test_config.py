@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from dashboard.config import Config, _parse_feeds
+from dashboard.config import Config, parse_feeds
 
 
 def test_bare_url_gets_a_generated_label():
-    feeds = _parse_feeds("https://example.com/basic.ics")
+    feeds = parse_feeds("https://example.com/basic.ics")
     assert [(f.label, f.url) for f in feeds] == [
         ("Calendar 1", "https://example.com/basic.ics")
     ]
 
 
 def test_explicit_label_is_used():
-    (feed,) = _parse_feeds("Home=https://example.com/home.ics")
+    (feed,) = parse_feeds("Home=https://example.com/home.ics")
     assert (feed.label, feed.url) == ("Home", "https://example.com/home.ics")
 
 
@@ -23,13 +23,13 @@ def test_query_string_equals_is_not_mistaken_for_a_label():
     """The case that makes naive `split("=")` wrong: Google's iCal addresses
     are full of `=` in the path and query."""
     url = "https://calendar.google.com/calendar/ical/abc%3D%3D/private-x/basic.ics?key=v&b=2"
-    (feed,) = _parse_feeds(url)
+    (feed,) = parse_feeds(url)
     assert feed.url == url
     assert feed.label == "Calendar 1"
 
 
 def test_multiple_feeds_and_blank_entries():
-    feeds = _parse_feeds(" A=https://a.example/a.ics , ,https://b.example/b.ics ")
+    feeds = parse_feeds(" A=https://a.example/a.ics , ,https://b.example/b.ics ")
     assert [(f.label, f.url) for f in feeds] == [
         ("A", "https://a.example/a.ics"),
         ("Calendar 2", "https://b.example/b.ics"),
@@ -37,7 +37,7 @@ def test_multiple_feeds_and_blank_entries():
 
 
 def test_no_feeds_configured():
-    assert _parse_feeds("") == ()
+    assert parse_feeds("") == ()
 
 
 def test_output_dir_prefers_temp_tier_over_permanent(clean_env):

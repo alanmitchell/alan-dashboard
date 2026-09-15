@@ -216,3 +216,73 @@ def test_http_error_is_surfaced(monkeypatch, feeds, config):
     _stub_feed(monkeypatch, b"", status=404)
     panel = _collect(config)
     assert "404" in panel.error
+
+
+# --- where the feed list comes from ------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _clear_secret_cache():
+    from dashboard import secrets
+
+    secrets.reset_cache()
+    yield
+    secrets.reset_cache()
+
+
+def test_environment_wins_over_the_secrets_service(monkeypatch, feeds, config):
+    """Local --env-file development must not be overridden by a stored secret."""
+    from dashboard import secrets
+
+    def should_not_be_called(*args, **kwargs):  # pragma: no cover
+        raise AssertionError("secrets service consulted despite an env override")
+
+    monkeypatch.setattr(secrets, "get_secret", should_not_be_called)
+    now = datetime.now(timezone.utc)
+    _stub_feed(
+        monkeypatch,
+        _calendar(_event("1", "From env", _utc(now + timedelta(hours=1)),
+                         _utc(now + timedelta(hours=2)))),
+    )
+    assert [item.primary for item in _collect(config).items] == ["From env"]
+
+
+def test_secrets_service_supplies_feeds_when_env_is_unset(monkeypatch, config):
+    from dashboard import secrets
+
+    monkeypatch.setattr(
+        secrets, "get_secret",
+        lambda key, cfg: "Stored=https://example.invalid/home.ics",
+    )
+    now = datetime.now(timezone.utc)
+    _stub_feed(
+        monkeypatch,
+        _calendar(_event("1", "From secrets", _utc(now + timedelta(hours=1)),
+                         _utc(now + timedelta(hours=2)))),
+    )
+    panel = _collect(config)
+    assert [item.primary for item in panel.items] == ["From secrets"]
+    assert panel.error == ""
+
+
+def test_unreachable_secrets_service_is_reported_not_disguised(monkeypatch, config):
+    """Showing the setup hint here would send you looking in the wrong place."""
+    from dashboard import secrets
+
+    def explode(key, cfg):
+        raise secrets.SecretsUnavailable("connection refused")
+
+    monkeypatch.setattr(secrets, "get_secret", explode)
+    panel = _collect(config)
+    assert "secrets service" in panel.error
+    assert panel.stub is False
+
+
+def test_nothing_configured_anywhere_shows_the_setup_hint(monkeypatch, config):
+    from dashboard import secrets
+
+    monkeypatch.setattr(secrets, "get_secret", lambda key, cfg: "")
+    panel = _collect(config)
+    assert panel.stub is True
+    assert "Secrets app" in panel.empty_message
+    assert panel.error == ""

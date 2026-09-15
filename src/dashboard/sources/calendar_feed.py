@@ -18,13 +18,15 @@ from datetime import date, datetime, time, timedelta
 
 import requests
 
+from .. import secrets
 from ..charts import bar_chart
-from ..config import CalendarFeed, Config
+from ..config import CalendarFeed, Config, parse_feeds
 from .base import Item, Metric, Panel, Source
 
 _SETUP_HINT = (
     "Set CALENDAR_ICS_URLS to your calendar's secret iCal address "
-    '(comma-separated; "Label=URL" to name a feed).'
+    '(comma-separated; "Label=URL" to name a feed). On a Bottle, store it in '
+    "the Secrets app under that name."
 )
 
 
@@ -33,7 +35,16 @@ class CalendarSource(Source):
     title = "Upcoming"
 
     def collect(self, config: Config) -> Panel:
-        if not config.calendar_feeds:
+        try:
+            feeds = self._feeds(config)
+        except secrets.SecretsUnavailable as exc:
+            # The grant is declared but the service did not answer. Say so --
+            # showing the "not configured yet" hint would send you looking in
+            # the wrong place.
+            return self.panel(error=f"secrets service: {exc}",
+                              empty_message="Calendar feeds could not be read.")
+
+        if not feeds:
             return self.panel(stub=True, empty_message=_SETUP_HINT)
 
         now = datetime.now(config.timezone)
@@ -41,7 +52,7 @@ class CalendarSource(Source):
 
         events: list[dict] = []
         failures: list[str] = []
-        for feed in config.calendar_feeds:
+        for feed in feeds:
             try:
                 events.extend(self._fetch(feed, config, now, window_end))
             except Exception as exc:  # one bad feed must not lose the others
@@ -72,6 +83,17 @@ class CalendarSource(Source):
                 Metric("This window", str(len(events)), "events"),
             ]
         return panel
+
+    def _feeds(self, config: Config) -> tuple[CalendarFeed, ...]:
+        """Where the feed list comes from, in order of precedence.
+
+        The environment wins so that ``docker run --env-file`` keeps working
+        unchanged for local development, and so an operator can override a
+        stored secret without editing it.
+        """
+        if config.calendar_feeds:
+            return config.calendar_feeds
+        return parse_feeds(secrets.get_secret("CALENDAR_ICS_URLS", config))
 
     def _fetch(
         self,

@@ -46,8 +46,11 @@ class CalendarFeed:
     url: str
 
 
-def _parse_feeds(raw: str) -> tuple[CalendarFeed, ...]:
-    """Parse ``CALENDAR_ICS_URLS`` into feeds.
+def parse_feeds(raw: str) -> tuple[CalendarFeed, ...]:
+    """Parse a ``CALENDAR_ICS_URLS`` value into feeds.
+
+    The value may come from the environment or from the secrets service; see
+    :mod:`dashboard.secrets` for which wins.
 
     Entries are comma-separated and may be either a bare URL or ``Label=URL``.
     Only the first ``=`` splits, and only when the left-hand side looks like a
@@ -91,6 +94,9 @@ class Config:
     data_dir: Path
     refresh_seconds: int
     http_timeout: float
+    # Parsed from the environment only. Empty here does not mean "no
+    # calendar": the secrets service is consulted at collect time. Note that no
+    # credential is stored on this object -- it lands in tracebacks and reprs.
     calendar_feeds: tuple[CalendarFeed, ...]
     calendar_lookahead_days: int
     host: str
@@ -115,7 +121,7 @@ class Config:
             # wall display picks up new data without anyone touching it.
             refresh_seconds=_int("DASHBOARD_REFRESH_SECONDS", 1860),
             http_timeout=_float("DASHBOARD_HTTP_TIMEOUT", 15.0),
-            calendar_feeds=_parse_feeds(_str("CALENDAR_ICS_URLS")),
+            calendar_feeds=parse_feeds(_str("CALENDAR_ICS_URLS")),
             calendar_lookahead_days=_int("CALENDAR_LOOKAHEAD_DAYS", 7),
             host=_str("DASHBOARD_HOST", "0.0.0.0"),
             port=_int("PORT", 8080),

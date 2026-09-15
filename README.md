@@ -77,8 +77,10 @@ PYTHONPATH=src python -m dashboard.generate                    # generate once
 
 1. Push this repository somewhere your Bottle can reach by git URL.
 2. In the Bottle dashboard, choose **Deploy New App** and give it that URL.
-3. Set the environment variables below on the app.
-4. It appears at `https://alan-dashboard.<your-zone-domain>/`.
+3. Approve the `secrets` grant the manifest requests.
+4. Store your calendar URL in the **Secrets** app under `CALENDAR_ICS_URLS`
+   (see [Secrets](#secrets)).
+5. It appears at `https://alan-dashboard.<your-zone-domain>/`.
 
 The manifest leaves `public_paths` empty, so the router requires your login on
 every path — appropriate for a page showing your home's sensors and your
@@ -88,14 +90,16 @@ constant `ok` and exposes no data.
 
 ## Configuration
 
-Everything is read from the environment. Nothing needs a config file.
+Non-secret settings are read from the environment. Secrets come from the
+Bottle's secrets service; see [Secrets](#secrets) below. Nothing needs a config
+file in the repository.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `TZ` | `UTC` | Display timezone, e.g. `America/Anchorage`. An unknown zone falls back to UTC rather than failing. |
 | `DASHBOARD_TITLE` | `Home Dashboard` | Page heading and `<title>`. |
 | `DASHBOARD_SUBTITLE` | — | Optional line under the heading. |
-| `CALENDAR_ICS_URLS` | — | Comma-separated iCalendar feeds. See below. |
+| `CALENDAR_ICS_URLS` | — | Comma-separated iCalendar feeds. Overrides the stored secret; see [Secrets](#secrets). |
 | `CALENDAR_LOOKAHEAD_DAYS` | `7` | How far ahead the calendar panel looks. |
 | `DASHBOARD_REFRESH_SECONDS` | `1860` | How often the page reloads itself. Keep it slightly longer than the cron interval. |
 | `DASHBOARD_HTTP_TIMEOUT` | `15` | Timeout for outbound requests, in seconds. |
@@ -109,6 +113,71 @@ itself. Output goes to the first of `DASHBOARD_OUTPUT_DIR`,
 preference, because the page is reproducible on the next cron run and does not
 need to occupy backed-up storage.
 
+## Secrets
+
+Cloud in a Bottle has **no mechanism for setting arbitrary environment variables
+on an installed app**, and a secret must never go in the Dockerfile — `ENV` and
+`ARG` are both baked into image layers and readable with `docker history`, even
+if the value never reached git.
+
+So anything sensitive comes from the pre-installed **Secrets** app. The manifest
+declares the grant:
+
+```toml
+[[services.v2.consumes]]
+service = "github.com/imbue-openhost/openhost/services/secrets"
+shortname = "secrets"
+version = ">=0.1.0"
+grants = [{ key = "CALENDAR_ICS_URLS" }]
+```
+
+At generate time the app reads it through the router, authenticated with the
+`BOTTLE_APP_TOKEN` injected per app:
+
+```
+POST $BOTTLE_ROUTER_URL/api/services/v2/call/secrets/get
+Authorization: Bearer $BOTTLE_APP_TOKEN
+{"keys": ["CALENDAR_ICS_URLS"]}
+```
+
+**Resolution order**, implemented in `sources/calendar_feed.py`:
+
+1. The `CALENDAR_ICS_URLS` environment variable, if set.
+2. Otherwise the secrets service.
+3. Otherwise the panel shows a setup hint.
+
+The environment wins so local `--env-file` development works unchanged, and so
+you can override a stored value without editing it. Outside a Bottle there is no
+router at all, which is not an error — it just means step 1 is the only source.
+
+If the service *is* configured but the call fails, the calendar panel reports
+that explicitly rather than showing the "not configured yet" hint, which would
+send you looking in the wrong place. Neither the token nor any secret value is
+ever logged.
+
+One caveat: the manual documents the request but not the reply shape, so
+`secrets._extract()` accepts a flat mapping or one wrapped in `secrets` /
+`values` / `data` / `result`, and raises on anything it cannot recognise rather
+than silently reading it as "unset". If your instance answers differently, that
+is the one function to adjust.
+
+### Local development
+
+No Bottle, no secrets service — use an env file, which `.gitignore` already
+covers:
+
+```sh
+cat > .env <<'EOF'
+TZ=America/Anchorage
+DASHBOARD_TITLE=Alan's Home
+CALENDAR_ICS_URLS=Home=https://calendar.google.com/calendar/ical/.../basic.ics
+EOF
+
+docker run --rm -p 8080:8080 --env-file .env alan-dashboard
+```
+
+`--env-file` takes bare `KEY=value` lines; do not quote the values.
+
 ### Connecting Google Calendar
 
 The calendar panel reads **iCal feeds**, not the Google Calendar API. In Google
@@ -116,13 +185,16 @@ Calendar: *Settings* → pick the calendar → *Integrate calendar* → **Secret
 address in iCal format**. Set it as:
 
 ```
-CALENDAR_ICS_URLS=Home=https://calendar.google.com/calendar/ical/.../basic.ics
+Home=https://calendar.google.com/calendar/ical/.../basic.ics
 ```
+
+Store that string in the Secrets app under `CALENDAR_ICS_URLS`, or put it in
+your local `.env` for development.
 
 This avoids an OAuth client, a consent screen and token refresh in a container
 nobody logs into. The trade-off is that the URL *is* the credential — anyone
-holding it can read that calendar. Keep it in the app's environment, never in
-this repository, and rotate it from the same settings page if it leaks.
+holding it can read that calendar. Never commit it, and rotate it from the same
+settings page if it leaks.
 
 Entries are comma-separated, and `Label=URL` names a feed in the UI. A bare URL
 gets an automatic name. Any ICS feed works, so you can mix in iCloud, Fastmail,
@@ -211,6 +283,10 @@ half-written document.
 **Escaping is explicitly on.** `generate.py` sets `autoescape=True` rather than
 `select_autoescape()`, which keys off the template's extension and would leave
 escaping off for a `.j2` file. Calendar summaries are third-party text.
+
+**Secrets are read, never stored.** `Config` deliberately holds no credential:
+it is a dataclass, so it lands in reprs and tracebacks. The token is read from
+the environment at call time inside `secrets.py` instead.
 
 **Static, not interactive.** The page has no JavaScript. Charts have no hover
 tooltips; the per-chart data table is the way to read exact values. That is the
