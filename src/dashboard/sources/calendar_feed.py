@@ -67,6 +67,7 @@ class CalendarSource(Source):
             error="; ".join(failures),
         )
 
+        '''
         if events:
             today = now.date()
             per_day = Counter(event["start"].date() for event in events)
@@ -82,6 +83,7 @@ class CalendarSource(Source):
                 Metric("Today", str(per_day.get(today, 0)), "events"),
                 Metric("This window", str(len(events)), "events"),
             ]
+        '''
         return panel
 
     def _feeds(self, config: Config) -> tuple[CalendarFeed, ...]:
